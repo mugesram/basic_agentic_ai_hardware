@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LED Status Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f172a;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --off: #334155;
+      --on: #22c55e;
+      --border: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+      background: radial-gradient(circle at top, #1e293b, var(--bg));
+      color: var(--text);
+    }
+
+    .panel {
+      width: min(720px, 92vw);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.25rem;
+    }
+
+    .sub {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .led-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(140px, 1fr));
+      gap: 16px;
+    }
+
+    .led-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .circle {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--off);
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.06) inset;
+      transition: background 120ms ease;
+    }
+
+    .circle.on {
+      background: var(--on);
+      box-shadow: 0 0 12px rgba(34,197,94,0.8);
+    }
+
+    .led-label {
+      font-weight: 600;
+    }
+
+    .state {
+      margin-left: auto;
+      color: var(--muted);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+    }
+
+    .footer {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .mode-hint {
+      margin: 12px 0 0;
+      color: #fca5a5;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Raspberry Pi LED Monitor</h1>
+    <p class="sub">Reads <strong>output.json</strong> continuously and shows LED 1-4 status.</p>
+
+    <section class="led-grid">
+      <article class="led-card">
+        <span id="dot-1" class="circle"></span>
+        <span class="led-label">LED 1</span>
+        <span id="state-1" class="state">OFF</span>
+      </article>
+      <article class="led-card">
+        <span id="dot-2" class="circle"></span>
+        <span class="led-label">LED 2</span>
+        <span id="state-2" class="state">OFF</span>
+      </article>
+      <article class="led-card">
+        <span id="dot-3" class="circle"></span>
+        <span class="led-label">LED 3</span>
+        <span id="state-3" class="state">OFF</span>
+      </article>
+      <article class="led-card">
+        <span id="dot-4" class="circle"></span>
+        <span class="led-label">LED 4</span>
+        <span id="state-4" class="state">OFF</span>
+      </article>
+    </section>
+
+    <p id="updatedAt" class="footer">Waiting for output.json...</p>
+    <p id="modeHint" class="mode-hint" hidden></p>
+  </main>
+
+  <script>
+    const ids = ["1", "2", "3", "4"];
+    const isFileProtocol = window.location.protocol === "file:";
+
+    function setLedState(id, value) {
+      const dot = document.getElementById(`dot-${id}`);
+      const text = document.getElementById(`state-${id}`);
+      const isOn = String(value).toLowerCase() === "on";
+
+      dot.classList.toggle("on", isOn);
+      text.textContent = isOn ? "ON" : "OFF";
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch(`output.json?t=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const leds = (data && data.leds) || {};
+
+        ids.forEach(id => setLedState(id, leds[id] || "off"));
+
+        const updated = document.getElementById("updatedAt");
+        updated.textContent = data.updated_at
+          ? `Last updated: ${new Date(data.updated_at).toLocaleString()}`
+          : "Last updated: n/a";
+      } catch {
+        ids.forEach(id => setLedState(id, "off"));
+        document.getElementById("updatedAt").textContent = "Waiting for output.json...";
+      }
+    }
+
+    if (isFileProtocol) {
+      const hint = document.getElementById("modeHint");
+      hint.hidden = false;
+      hint.textContent = "This page is opened with file:// and browser blocks reading output.json. Start a local server and open: http://127.0.0.1:8000/led_dashboard.html";
+      document.getElementById("updatedAt").textContent = "File mode detected. Waiting for HTTP mode...";
+    } else {
+      refresh();
+      setInterval(refresh, 500);
+    }
+  </script>
+</body>
+</html>
